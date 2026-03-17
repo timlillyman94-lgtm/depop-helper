@@ -28,7 +28,7 @@ function fileToGenerativePart(base64Data: string, mimeType: string) {
 export async function analyzeProduct(
   images: { base64: string; mimeType: string }[]
 ): Promise<ProductInfo> {
-  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
   const imageParts = images.map((img) =>
     fileToGenerativePart(img.base64, img.mimeType)
@@ -58,11 +58,9 @@ export async function analyzeProduct(
 }
 
 const MODEL_POSE_VARIATIONS = [
-  "standing upright, facing camera directly, confident pose",
-  "three-quarter turn, looking slightly off-camera",
-  "relaxed standing pose, one hand on hip",
-  "walking pose, natural movement",
-  "standing with slight lean, casual stance",
+  "standing upright, facing the camera directly, confident pose",
+  "three-quarter turn to the left, looking slightly off-camera",
+  "relaxed standing pose, one hand on hip, slight smile",
 ];
 
 export async function generateModelImages(
@@ -84,7 +82,7 @@ export async function generateModelImages(
     const revision = revisionNote
       ? ` Important correction: ${revisionNote}. Make sure this detail is accurately shown.`
       : "";
-    const prompt = `Generate a professional fashion photograph of a virtual model wearing the ${baseDescription} shown in the reference image. The model is ${pose}. Clean minimal white or light grey studio background. Professional product photography lighting. Editorial fashion style. The clothing should be clearly visible and well-lit.${revision}`;
+    const prompt = `Generate a professional fashion photograph of a model wearing the ${baseDescription} shown in the reference image. CRITICAL: This must be a full-body shot — the model's entire body from head to toe must be fully visible, with no cropping at the legs or feet. The model is ${pose}. Plain white studio background. Soft, even product photography lighting. Portrait orientation. The complete outfit must be clearly visible.${revision}`;
 
     try {
       const result = await model.generateContent({
