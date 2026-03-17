@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb;
+  --foreground: #111827;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-depop: #ff2200;
+  --font-sans: var(--font-geist-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  /* Prevent bounce scroll on iOS */
+  overscroll-behavior: none;
+}
+
+/* Safe area for notched phones */
+main {
+  padding-bottom: env(safe-area-inset-bottom);
+}
