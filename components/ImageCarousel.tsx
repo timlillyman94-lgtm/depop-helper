@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface ImageCarouselProps {
   images: string[]; // base64 strings
@@ -151,15 +152,9 @@ export function ImageCarousel({ images, loading }: ImageCarouselProps) {
 
       {/* Lightbox */}
       {lightboxIndex !== null && currentImg && (
-        <div
-          className="fixed inset-0 z-50 bg-black flex flex-col"
-          onClick={() => setLightboxIndex(null)}
-        >
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
           {/* Top bar */}
-          <div
-            className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="flex items-center justify-between px-4 py-3 flex-shrink-0">
             <span className="text-white/60 text-sm">{lightboxIndex + 1} / {images.length}</span>
             <button
               onClick={() => setLightboxIndex(null)}
@@ -172,21 +167,35 @@ export function ImageCarousel({ images, loading }: ImageCarouselProps) {
             </button>
           </div>
 
-          {/* Image — fills available space, pinch-to-zoom works natively */}
-          <div className="flex-1 relative" onClick={(e) => e.stopPropagation()}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`data:image/jpeg;base64,${currentImg}`}
-              alt={`Model photo ${lightboxIndex + 1}`}
-              className="w-full h-full object-contain"
-              style={{ touchAction: "pinch-zoom" }}
-            />
+          {/* Zoomable image */}
+          <div className="flex-1 relative overflow-hidden">
+            <TransformWrapper
+              key={lightboxIndex}
+              initialScale={1}
+              minScale={1}
+              maxScale={5}
+              centerOnInit
+              doubleClick={{ mode: "toggle", step: 2 }}
+            >
+              <TransformComponent
+                wrapperStyle={{ width: "100%", height: "100%" }}
+                contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:image/jpeg;base64,${currentImg}`}
+                  alt={`Model photo ${lightboxIndex + 1}`}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", userSelect: "none" }}
+                  draggable={false}
+                />
+              </TransformComponent>
+            </TransformWrapper>
 
             {/* Left arrow */}
             {images.length > 1 && (
               <button
                 onClick={() => setLightboxIndex((lightboxIndex - 1 + images.length) % images.length)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 flex items-center justify-center backdrop-blur-sm"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 flex items-center justify-center backdrop-blur-sm z-10"
                 aria-label="Previous"
               >
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -199,7 +208,7 @@ export function ImageCarousel({ images, loading }: ImageCarouselProps) {
             {images.length > 1 && (
               <button
                 onClick={() => setLightboxIndex((lightboxIndex + 1) % images.length)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 flex items-center justify-center backdrop-blur-sm"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 flex items-center justify-center backdrop-blur-sm z-10"
                 aria-label="Next"
               >
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -210,10 +219,7 @@ export function ImageCarousel({ images, loading }: ImageCarouselProps) {
           </div>
 
           {/* Bottom bar — select + download */}
-          <div
-            className="flex items-center justify-between px-4 py-4 gap-3 flex-shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="flex items-center justify-between px-4 py-4 gap-3 flex-shrink-0">
             <button
               onClick={() => toggleSelect(lightboxIndex)}
               className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-colors ${

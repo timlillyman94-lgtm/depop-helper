@@ -14,7 +14,8 @@
     "googleapis": "^171.4.0",
     "next": "16.1.7",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-zoom-pan-pinch": "^3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
