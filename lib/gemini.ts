@@ -86,19 +86,22 @@ export async function generateModelImages(
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [...imageParts, { text: prompt }] }],
         generationConfig: {
-          // @ts-expect-error responseModalities is not in the types yet
-          responseModalities: ["TEXT", "IMAGE"],
+          // @ts-expect-error responseModalities not yet in SDK types
+          responseModalities: ["IMAGE", "TEXT"],
         },
       });
 
       const parts = result.response.candidates?.[0]?.content?.parts ?? [];
       for (const part of parts) {
-        if (part.inlineData?.mimeType?.startsWith("image/")) {
-          return part.inlineData.data;
+        // inlineData contains the image bytes
+        if ((part as { inlineData?: { mimeType: string; data: string } }).inlineData?.mimeType?.startsWith("image/")) {
+          return (part as { inlineData: { data: string } }).inlineData.data;
         }
       }
-    } catch {
-      // individual variation failed — return null, caller filters
+      // Log if no image came back so we can see why
+      console.warn("generateOne: no image part in response. Parts:", JSON.stringify(parts.map(p => Object.keys(p))));
+    } catch (e) {
+      console.error("generateOne error:", e instanceof Error ? e.message : e);
     }
     return null;
   };

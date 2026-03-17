@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
     const productInfo = await analyzeProduct(images);
     return NextResponse.json(productInfo);
   } catch (err) {
-    console.error("analyze error:", err);
-    return NextResponse.json({ error: "Analysis failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Analysis failed";
+    console.error("analyze error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
