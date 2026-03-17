@@ -28,7 +28,7 @@ function fileToGenerativePart(base64Data: string, mimeType: string) {
 export async function analyzeProduct(
   images: { base64: string; mimeType: string }[]
 ): Promise<ProductInfo> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
 
   const imageParts = images.map((img) =>
     fileToGenerativePart(img.base64, img.mimeType)
