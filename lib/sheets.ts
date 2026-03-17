@@ -1,12 +1,7 @@
 import { google } from "googleapis";
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID!;
-
-const HEADERS = [
-  "Date", "Title", "Brand", "Colour", "Type", "Size",
-  "Condition", "Material", "Style", "Description",
-  "Cost Price (AUD)", "Suggested Price", "Tags",
-];
+const SHEET_NAME = "Depop Sales";
 
 function getAuth() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
@@ -18,61 +13,34 @@ function getAuth() {
 
 export async function appendProductRow(data: {
   title: string;
-  brand: string;
-  color: string;
-  clothingType: string;
-  size: string;
-  condition: string;
-  material: string;
-  style: string;
-  description: string;
   costPrice: string;
-  suggestedPrice: string;
-  tags: string[];
 }) {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
-  // Add header row if sheet is empty
-  const check = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: "A1:A1",
-  });
-
-  if (!check.data.values?.length) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: "A1",
-      valueInputOption: "RAW",
-      requestBody: { values: [HEADERS] },
-    });
-  }
-
-  const date = new Date().toLocaleDateString("en-AU", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-  });
+  // Write Item Description (col C) and Original Cost Price (col J).
+  // Cols A, B, D-I, K-M are left blank — filled in manually when the item sells.
+  const row = [
+    "",           // A: Sale Date
+    "",           // B: Buyer
+    data.title,   // C: Item Description
+    "",           // D: Final Item Price
+    "",           // E: Shipping
+    "",           // F: Payment Fee
+    "",           // G: Depop Fee
+    "",           // H: Boosting Fee
+    "",           // I: Payout
+    data.costPrice || "", // J: Original Cost Price
+    "",           // K: Actual Postage Fee
+    "",           // L: Postage Bag/Box Cost
+    "",           // M: Profit
+  ];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: "A:M",
+    range: `${SHEET_NAME}!A:M`,
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [[
-        date,
-        data.title,
-        data.brand,
-        data.color,
-        data.clothingType,
-        data.size,
-        data.condition,
-        data.material,
-        data.style,
-        data.description,
-        data.costPrice,
-        data.suggestedPrice,
-        data.tags.join(", "),
-      ]],
-    },
+    requestBody: { values: [row] },
   });
 }

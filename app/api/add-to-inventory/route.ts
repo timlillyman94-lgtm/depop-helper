@@ -16,17 +16,7 @@ export async function POST(req: NextRequest) {
 
     await appendProductRow({
       title: productInfo.title,
-      brand: productInfo.brand,
-      color: productInfo.color,
-      clothingType: productInfo.clothingType,
-      size: productInfo.size,
-      condition: productInfo.condition,
-      material: productInfo.material,
-      style: productInfo.style,
-      description: productInfo.description,
       costPrice: costPrice?.trim() || "",
-      suggestedPrice: productInfo.suggestedPrice,
-      tags: productInfo.tags,
     });
 
     return NextResponse.json({ success: true });
