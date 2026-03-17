@@ -40,16 +40,44 @@ export function ImageCarousel({ images, loading }: ImageCarouselProps) {
     });
   };
 
-  const downloadImage = (base64: string, index: number) => {
+  const base64ToFile = (base64: string, filename: string): File => {
+    const bytes = atob(base64);
+    const ab = new ArrayBuffer(bytes.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < bytes.length; i++) ia[i] = bytes.charCodeAt(i);
+    return new File([ab], filename, { type: "image/jpeg" });
+  };
+
+  const downloadImage = async (base64: string, index: number) => {
+    const filename = `depop-photo-${index + 1}.jpg`;
+    const file = base64ToFile(base64, filename);
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+      }
+    }
+    // Desktop fallback
     const link = document.createElement("a");
     link.href = `data:image/jpeg;base64,${base64}`;
-    link.download = `depop-photo-${index + 1}.jpg`;
+    link.download = filename;
     link.click();
   };
 
-  const downloadSelected = () => {
+  const downloadSelected = async () => {
     const toDownload = selected.size > 0 ? [...selected] : images.map((_, i) => i);
-    toDownload.forEach((i) => downloadImage(images[i], i));
+    const files = toDownload.map((i) => base64ToFile(images[i], `depop-photo-${i + 1}.jpg`));
+    if (navigator.canShare?.({ files })) {
+      try { await navigator.share({ files }); return; } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+      }
+    }
+    // Desktop fallback
+    toDownload.forEach((i) => {
+      const link = document.createElement("a");
+      link.href = `data:image/jpeg;base64,${images[i]}`;
+      link.download = `depop-photo-${i + 1}.jpg`;
+      link.click();
+    });
   };
 
   if (loading) {
