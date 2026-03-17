@@ -67,7 +67,8 @@ const MODEL_POSE_VARIATIONS = [
 
 export async function generateModelImages(
   images: { base64: string; mimeType: string }[],
-  productInfo: ProductInfo
+  productInfo: ProductInfo,
+  revisionNote?: string
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({
     model: "gemini-3-pro-image-preview",
@@ -80,7 +81,10 @@ export async function generateModelImages(
   const baseDescription = `${productInfo.color} ${productInfo.brand} ${productInfo.clothingType}`;
 
   const generateOne = async (pose: string): Promise<string | null> => {
-    const prompt = `Generate a professional fashion photograph of a virtual model wearing the ${baseDescription} shown in the reference image. The model is ${pose}. Clean minimal white or light grey studio background. Professional product photography lighting. Editorial fashion style. The clothing should be clearly visible and well-lit.`;
+    const revision = revisionNote
+      ? ` Important correction: ${revisionNote}. Make sure this detail is accurately shown.`
+      : "";
+    const prompt = `Generate a professional fashion photograph of a virtual model wearing the ${baseDescription} shown in the reference image. The model is ${pose}. Clean minimal white or light grey studio background. Professional product photography lighting. Editorial fashion style. The clothing should be clearly visible and well-lit.${revision}`;
 
     try {
       const result = await model.generateContent({

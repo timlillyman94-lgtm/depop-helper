@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { UploadZone } from "@/components/UploadZone";
 import { ImageCarousel } from "@/components/ImageCarousel";
 import { ListingInfo } from "@/components/ListingInfo";
@@ -8,7 +8,6 @@ import { ProductInfo } from "@/lib/gemini";
 
 type Stage = "upload" | "processing" | "results";
 
-// Compress image to max 1024px and ~85% JPEG quality before uploading
 async function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
     const img = new window.Image();
@@ -54,17 +53,50 @@ export default function Home() {
   const [imagesLoading, setImagesLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [revisionNote, setRevisionNote] = useState("");
+  const [revising, setRevising] = useState(false);
+
+  // Keep compressed image data around so revisions don't need re-upload
+  const cachedImageData = useRef<{ base64: string; mimeType: string }[]>([]);
+
+  const runImageGeneration = async (
+    imageData: { base64: string; mimeType: string }[],
+    info: ProductInfo,
+    revision?: string
+  ) => {
+    setImagesLoading(true);
+    setImageError(null);
+
+    const genRes = await fetch("/api/generate-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: imageData, productInfo: info, revisionNote: revision }),
+    });
+
+    if (genRes.ok) {
+      const { images } = await genRes.json();
+      if (images?.length) {
+        setModelImages(images);
+      } else {
+        setImageError("No model photos were generated — try again");
+      }
+    } else {
+      const body = await genRes.json().catch(() => ({}));
+      setImageError(body.error || "Model photo generation failed");
+    }
+
+    setImagesLoading(false);
+  };
 
   const handleUpload = async (files: File[]) => {
     setError(null);
     setImageError(null);
+    setRevisionNote("");
     setStage("processing");
 
     try {
-      // Compress images before sending (phone photos can be 4-8MB each)
       const compressed = await Promise.all(files.map(compressImage));
 
-      // Step 1: Analyze product info
       const formData = new FormData();
       compressed.forEach((f) => formData.append("images", f));
 
@@ -77,33 +109,22 @@ export default function Home() {
       setProductInfo(info);
       setStage("results");
 
-      // Step 2: Generate model images
-      setImagesLoading(true);
       const imageData = await Promise.all(compressed.map(fileToBase64));
+      cachedImageData.current = imageData;
 
-      const genRes = await fetch("/api/generate-models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: imageData, productInfo: info }),
-      });
-
-      if (genRes.ok) {
-        const { images } = await genRes.json();
-        if (images?.length) {
-          setModelImages(images);
-        } else {
-          setImageError("No model photos were generated — try again");
-        }
-      } else {
-        const body = await genRes.json().catch(() => ({}));
-        setImageError(body.error || "Model photo generation failed");
-      }
+      await runImageGeneration(imageData, info);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setStage("upload");
-    } finally {
-      setImagesLoading(false);
     }
+  };
+
+  const handleRevise = async () => {
+    if (!revisionNote.trim() || !productInfo || imagesLoading) return;
+    setRevising(true);
+    await runImageGeneration(cachedImageData.current, productInfo, revisionNote.trim());
+    setRevisionNote("");
+    setRevising(false);
   };
 
   const reset = () => {
@@ -112,6 +133,8 @@ export default function Home() {
     setModelImages([]);
     setError(null);
     setImageError(null);
+    setRevisionNote("");
+    cachedImageData.current = [];
   };
 
   return (
@@ -158,8 +181,36 @@ export default function Home() {
             {imageError && !imagesLoading && (
               <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-sm">{imageError}</div>
             )}
+
             <ImageCarousel images={modelImages} loading={imagesLoading} />
+
+            {/* Revision input — shown after images load */}
+            {!imagesLoading && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Revise model photos</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={revisionNote}
+                    onChange={(e) => setRevisionNote(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleRevise()}
+                    placeholder="e.g. the dress has a slit on the left shoulder"
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-depop"
+                    disabled={revising}
+                  />
+                  <button
+                    onClick={handleRevise}
+                    disabled={!revisionNote.trim() || revising}
+                    className="px-4 py-3 bg-depop text-white font-semibold rounded-xl disabled:opacity-40 active:scale-95 transition-transform text-sm"
+                  >
+                    {revising ? "…" : "Revise"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <ListingInfo info={productInfo} loading={false} />
+
             <div className="pb-8">
               <button
                 onClick={reset}
