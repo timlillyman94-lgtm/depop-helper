@@ -55,6 +55,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [revisionNote, setRevisionNote] = useState("");
   const [revising, setRevising] = useState(false);
+  const [costPrice, setCostPrice] = useState("");
+  const [inventoryStatus, setInventoryStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
 
   // Keep compressed image data around so revisions don't need re-upload
   const cachedImageData = useRef<{ base64: string; mimeType: string }[]>([]);
@@ -127,6 +130,31 @@ export default function Home() {
     setRevising(false);
   };
 
+  const handleAddToInventory = async () => {
+    if (!productInfo || inventoryStatus === "loading") return;
+    setInventoryStatus("loading");
+    setInventoryError(null);
+
+    try {
+      const res = await fetch("/api/add-to-inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productInfo, costPrice }),
+      });
+
+      if (res.ok) {
+        setInventoryStatus("success");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setInventoryError(body.error || "Failed to add to inventory");
+        setInventoryStatus("error");
+      }
+    } catch (err) {
+      setInventoryError(err instanceof Error ? err.message : "Failed to add to inventory");
+      setInventoryStatus("error");
+    }
+  };
+
   const reset = () => {
     setStage("upload");
     setProductInfo(null);
@@ -134,6 +162,9 @@ export default function Home() {
     setError(null);
     setImageError(null);
     setRevisionNote("");
+    setCostPrice("");
+    setInventoryStatus("idle");
+    setInventoryError(null);
     cachedImageData.current = [];
   };
 
@@ -210,6 +241,45 @@ export default function Home() {
             )}
 
             <ListingInfo info={productInfo} loading={false} />
+
+            {/* Inventory section */}
+            <div className="flex flex-col gap-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Add to Inventory</p>
+
+              {inventoryStatus === "success" ? (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm font-medium">
+                  Added to inventory spreadsheet
+                </div>
+              ) : (
+                <>
+                  {inventoryError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{inventoryError}</div>
+                  )}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">AUD</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={costPrice}
+                        onChange={(e) => setCostPrice(e.target.value)}
+                        placeholder="Cost price"
+                        className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-depop"
+                        disabled={inventoryStatus === "loading"}
+                      />
+                    </div>
+                    <button
+                      onClick={handleAddToInventory}
+                      disabled={inventoryStatus === "loading"}
+                      className="px-4 py-3 bg-depop text-white font-semibold rounded-xl disabled:opacity-40 active:scale-95 transition-transform text-sm whitespace-nowrap"
+                    >
+                      {inventoryStatus === "loading" ? "Adding…" : "Add to Inventory"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="pb-8">
               <button
