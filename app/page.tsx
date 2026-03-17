@@ -14,7 +14,7 @@ async function compressImage(file: File): Promise<File> {
     const img = new window.Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      const MAX = 1024;
+      const MAX = 1600;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
         if (width > height) { height = Math.round((height / width) * MAX); width = MAX; }
