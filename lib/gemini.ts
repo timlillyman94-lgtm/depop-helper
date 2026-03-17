@@ -69,7 +69,7 @@ export async function generateModelImages(
   revisionNote?: string
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({
-    model: "gemini-3-pro-image-preview",
+    model: "gemini-3.1-flash-image-preview",
   });
 
   const imageParts = images.map((img) =>
