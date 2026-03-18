@@ -88,8 +88,9 @@ export async function generateModelImages(
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [...imageParts, { text: prompt }] }],
         generationConfig: {
-          // @ts-expect-error responseModalities not yet in SDK types
+          // @ts-expect-error responseModalities/imageConfig not yet in SDK types
           responseModalities: ["IMAGE", "TEXT"],
+          imageConfig: { imageSize: "1K" },
         },
       });
 
