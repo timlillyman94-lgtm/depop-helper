@@ -18,6 +18,19 @@ export async function appendProductRow(data: {
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
+  // Find the last row that actually has an Item Description (col C),
+  // so we insert right after the data — not after blank rows or the summary row.
+  const readRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${SHEET_NAME}!C:C`,
+  });
+  const colC = readRes.data.values ?? [];
+  let lastDataRow = 1; // at minimum, row 1 (header)
+  for (let i = 0; i < colC.length; i++) {
+    if (colC[i]?.[0]) lastDataRow = i + 1; // 1-indexed
+  }
+  const insertRow = lastDataRow + 1;
+
   // Write Item Description (col C) and Original Cost Price (col J).
   // Cols A, B, D-I, K-M are left blank — filled in manually when the item sells.
   const row = [
@@ -36,11 +49,10 @@ export async function appendProductRow(data: {
     "",           // M: Profit
   ];
 
-  await sheets.spreadsheets.values.append({
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_NAME}!A:M`,
+    range: `${SHEET_NAME}!A${insertRow}:M${insertRow}`,
     valueInputOption: "RAW",
-    insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },
   });
 }
