@@ -54,7 +54,30 @@ export async function analyzeProduct(
 
   // Strip any markdown code blocks if present
   const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-  return JSON.parse(cleaned) as ProductInfo;
+  const info = JSON.parse(cleaned) as ProductInfo;
+  info.description += getMeasurementsTemplate(info.clothingType) + AI_DISCLAIMER;
+  return info;
+}
+
+const AI_DISCLAIMER =
+  "\n\nThe first image is AI-generated to showcase how this piece wears. As AI can occasionally vary in minor details, please ensure you review the actual garment photos included in the listing before purchasing";
+
+function getMeasurementsTemplate(clothingType: string): string {
+  const t = clothingType.toLowerCase();
+  if (/short/.test(t)) {
+    return "\n\nMeasurements (flat lay)\nWaist: \nInseam: ";
+  }
+  if (/dress|skirt|midi|mini|maxi|jumpsuit|romper/.test(t)) {
+    return "\n\nMeasurements (flat lay)\nPit to pit: \nWaist: \nLength: ";
+  }
+  if (/shirt|tee|top|blouse|hoodie|sweatshirt|jumper|jacket|coat|cardigan|crop|tank|vest|knit|sweater/.test(t)) {
+    return "\n\nMeasurements (flat lay)\nPit to pit: \nLength: ";
+  }
+  if (/pant|jean|trouser|cargo|legging/.test(t)) {
+    return "\n\nMeasurements (flat lay)\nWaist: \nInseam: ";
+  }
+  // Fallback for anything unrecognised
+  return "\n\nMeasurements (flat lay)\nPit to pit: \nLength: ";
 }
 
 const MODEL_POSE_VARIATIONS = [
