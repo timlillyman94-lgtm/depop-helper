@@ -122,15 +122,13 @@ function BrandField({ value, onChange }: { value: string; onChange: (v: string) 
 
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center">
+      {/* X button sits above TransformWrapper in z-order and uses pointerDown to fire before gesture capture */}
       <button
-        onClick={onClose}
-        className="absolute top-4 right-4 w-9 h-9 bg-white/20 rounded-full text-white text-xl flex items-center justify-center"
+        onPointerDown={(e) => { e.stopPropagation(); onClose(); }}
+        className="absolute top-4 right-4 z-[60] w-10 h-10 bg-white/20 rounded-full text-white text-2xl flex items-center justify-center"
       >×</button>
-      <div onClick={(e) => e.stopPropagation()} className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full flex items-center justify-center">
         <TransformWrapper>
           <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
