@@ -5,7 +5,7 @@ function getAuth() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON!);
   return new google.auth.GoogleAuth({
     credentials,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    scopes: ["https://www.googleapis.com/auth/drive"],
   });
 }
 
@@ -14,6 +14,9 @@ export async function uploadImageToDrive(
   mimeType: string,
   filename: string
 ): Promise<string> {
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!folderId) throw new Error("GOOGLE_DRIVE_FOLDER_ID env var is not set");
+
   const auth = getAuth();
   const drive = google.drive({ version: "v3", auth });
 
@@ -26,7 +29,7 @@ export async function uploadImageToDrive(
     requestBody: {
       name: filename,
       mimeType,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
+      parents: [folderId],
     },
     media: {
       mimeType,
