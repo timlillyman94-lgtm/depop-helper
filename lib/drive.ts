@@ -18,7 +18,9 @@ export async function uploadImageToDrive(
   const drive = google.drive({ version: "v3", auth });
 
   const buffer = Buffer.from(base64Data, "base64");
-  const stream = Readable.from(buffer);
+  // Wrap in array so the stream emits the whole buffer as one binary chunk,
+  // not individual byte values (which is what iterating a Buffer produces).
+  const stream = Readable.from([buffer]);
 
   const uploadRes = await drive.files.create({
     requestBody: {

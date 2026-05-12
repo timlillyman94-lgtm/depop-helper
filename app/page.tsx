@@ -731,7 +731,7 @@ export default function Home() {
       const uploadRes = await fetch("/api/upload-images", { method: "POST", body: formData });
       if (!uploadRes.ok) {
         const body = await uploadRes.json().catch(() => ({}));
-        throw new Error(body.error || "Image upload failed");
+        throw new Error(body.error || `Image upload failed (${uploadRes.status})`);
       }
       const { urls } = await uploadRes.json();
 
@@ -743,7 +743,7 @@ export default function Home() {
       });
       if (!submitRes.ok) {
         const body = await submitRes.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to write to sheet");
+        throw new Error(body.error || `Failed to write to sheet (${submitRes.status})`);
       }
 
       setSubmitStatus("success");
