@@ -708,22 +708,25 @@ export default function Home() {
     setSubmitError(null);
 
     try {
-      // Upload all images in order to Drive
-      const formData = new FormData();
-      for (const id of orderedIdentifiers) {
-        const [type, idxStr] = id.split(":");
-        const idx = Number(idxStr);
-        if (type === "uploaded") {
-          formData.append("images", allImages[idx].file);
-        } else {
-          // AI image — convert base64 to blob
+      // Build compressed File list in order
+      const files = await Promise.all(
+        orderedIdentifiers.map(async (id) => {
+          const [type, idxStr] = id.split(":");
+          const idx = Number(idxStr);
+          if (type === "uploaded") {
+            return compressImage(allImages[idx].file);
+          }
+          // AI image — decode base64 to File (already small, no compression needed)
           const byteStr = atob(aiImages[idx]);
           const arr = new Uint8Array(byteStr.length);
           for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
           const blob = new Blob([arr], { type: "image/jpeg" });
-          formData.append("images", new File([blob], `ai-model-${idx}.jpg`, { type: "image/jpeg" }));
-        }
-      }
+          return new File([blob], `ai-model-${idx}.jpg`, { type: "image/jpeg" });
+        })
+      );
+
+      const formData = new FormData();
+      files.forEach((f) => formData.append("images", f));
 
       const uploadRes = await fetch("/api/upload-images", { method: "POST", body: formData });
       if (!uploadRes.ok) {
