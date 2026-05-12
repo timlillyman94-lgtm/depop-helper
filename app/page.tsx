@@ -336,6 +336,8 @@ function StageReview({
   onUpdate,
   onSubmit,
   onBack,
+  onRevise,
+  onReset,
   submitStatus,
   submitError,
 }: {
@@ -345,6 +347,8 @@ function StageReview({
   onUpdate: (info: ProductInfo) => void;
   onSubmit: (orderedUrls: string[]) => void;
   onBack: () => void;
+  onRevise: (note: string) => Promise<string[]>;
+  onReset: () => void;
   submitStatus: "idle" | "uploading" | "submitting" | "success" | "error";
   submitError: string | null;
 }) {
@@ -449,9 +453,17 @@ function StageReview({
             onClick={async () => {
               if (!revisionNote.trim() || regenerating) return;
               setRegenerating(true);
-              // Trigger revision — handled by parent via onUpdate
-              setRegenerating(false);
-              setRevisionNote("");
+              try {
+                const newImages = await onRevise(revisionNote.trim());
+                setOrderedSlots((prev) => {
+                  const nonAI = prev.filter((s) => s.type !== "ai");
+                  const newAISlots: ImageSlot[] = newImages.map((_, i) => ({ type: "ai", idx: i }));
+                  return [...newAISlots, ...nonAI];
+                });
+                setRevisionNote("");
+              } finally {
+                setRegenerating(false);
+              }
             }}
             disabled={!revisionNote.trim() || regenerating}
             className="px-4 py-3 bg-depop text-white font-semibold rounded-xl disabled:opacity-40 text-sm"
@@ -489,7 +501,7 @@ function StageReview({
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">{submitError}</div>
       )}
 
-      <div className="flex gap-3 pb-8">
+      <div className="flex gap-3">
         <button onClick={onBack} className="flex-1 py-3.5 border-2 border-gray-300 text-gray-700 font-semibold rounded-2xl active:scale-95 transition-transform text-sm">
           Back
         </button>
@@ -502,6 +514,12 @@ function StageReview({
             : submitStatus === "submitting" ? "Saving to both sheets…"
             : submitStatus === "success" ? "Done"
             : "Add to Both Sheets"}
+        </button>
+      </div>
+
+      <div className="pb-8 text-center">
+        <button onClick={onReset} className="text-sm text-gray-400 underline underline-offset-2">
+          Start a new listing
         </button>
       </div>
     </div>
@@ -592,6 +610,29 @@ export default function Home() {
     }
   };
 
+  const handleRevise = async (note: string): Promise<string[]> => {
+    const selectedFiles = selectedIndices.map((i) => allImages[i].file);
+    const compressed = await Promise.all(selectedFiles.map(compressImage));
+    const imageData = await Promise.all(
+      compressed.map(async (f) => {
+        const buf = await f.arrayBuffer();
+        return { base64: Buffer.from(buf).toString("base64"), mimeType: f.type || "image/jpeg" };
+      })
+    );
+    const genRes = await fetch("/api/generate-models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images: imageData, productInfo, revisionNote: note }),
+    });
+    if (!genRes.ok) {
+      const body = await genRes.json().catch(() => ({}));
+      throw new Error(body.error || "Failed to regenerate model images");
+    }
+    const { images: generated } = await genRes.json();
+    setAiImages(generated);
+    return generated as string[];
+  };
+
   const handleSubmit = async (orderedIdentifiers: string[]) => {
     if (!productInfo) return;
     setSubmitStatus("uploading");
@@ -642,7 +683,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 flex items-center">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-depop rounded-lg flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -651,9 +692,6 @@ export default function Home() {
           </div>
           <span className="font-bold text-gray-900">Depop Helper</span>
         </div>
-        {stage !== "import" && (
-          <button onClick={reset} className="text-sm text-depop font-semibold">New Product</button>
-        )}
       </header>
 
       <div className="px-4 py-6 max-w-lg mx-auto">
@@ -680,6 +718,8 @@ export default function Home() {
             onUpdate={setProductInfo}
             onSubmit={handleSubmit}
             onBack={() => setStage("select")}
+            onRevise={handleRevise}
+            onReset={reset}
             submitStatus={submitStatus}
             submitError={submitError}
           />
