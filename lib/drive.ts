@@ -26,6 +26,7 @@ export async function uploadImageToDrive(
     requestBody: {
       name: filename,
       mimeType,
+      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID!],
     },
     media: {
       mimeType,
