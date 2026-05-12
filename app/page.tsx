@@ -34,6 +34,25 @@ interface UploadedImage {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+async function uploadFileToDrive(file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append("images", file);
+  const res = await fetch("/api/upload-images", { method: "POST", body: fd });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Image upload failed (${res.status})`);
+  }
+  const { urls } = await res.json();
+  return urls[0] as string;
+}
+
+function base64ToFile(b64: string, filename: string): File {
+  const byteStr = atob(b64);
+  const arr = new Uint8Array(byteStr.length);
+  for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+  return new File([arr], filename, { type: "image/jpeg" });
+}
+
 async function compressImage(file: File): Promise<File> {
   return new Promise((resolve) => {
     const img = new window.Image();
@@ -338,7 +357,7 @@ function StageGenerate() {
     <div className="flex flex-col items-center justify-center py-24 gap-4">
       <div className="w-12 h-12 border-4 border-depop border-t-transparent rounded-full animate-spin" />
       <p className="text-gray-600 font-medium">Generating your listing…</p>
-      <p className="text-gray-400 text-sm">Analysing photos + creating model images</p>
+      <p className="text-gray-400 text-sm">Analysing, generating model images + uploading to Drive</p>
     </div>
   );
 }
@@ -576,11 +595,10 @@ function StageReview({
         </button>
         <button
           onClick={handleSubmit}
-          disabled={submitStatus === "uploading" || submitStatus === "submitting" || submitStatus === "success"}
+          disabled={submitStatus === "submitting" || submitStatus === "success"}
           className="flex-1 py-3.5 bg-depop text-white font-semibold rounded-2xl disabled:opacity-40 active:scale-95 transition-transform text-sm"
         >
-          {submitStatus === "uploading" ? "Uploading images…"
-            : submitStatus === "submitting" ? "Saving to both sheets…"
+          {submitStatus === "submitting" ? "Saving to both sheets…"
             : submitStatus === "success" ? "Done"
             : "Add to Both Sheets"}
         </button>
@@ -603,6 +621,8 @@ export default function Home() {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [productInfo, setProductInfo] = useState<ProductInfo | null>(null);
   const [aiImages, setAiImages] = useState<string[]>([]); // base64
+  const [uploadedDriveUrls, setUploadedDriveUrls] = useState<string[]>([]);
+  const [aiDriveUrls, setAiDriveUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitStatus, setSubmitStatus] = useState<"idle" | "uploading" | "submitting" | "success" | "error">("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -619,6 +639,8 @@ export default function Home() {
     setSelectedIndices([]);
     setProductInfo(null);
     setAiImages([]);
+    setUploadedDriveUrls([]);
+    setAiDriveUrls([]);
     setError(null);
     setSubmitStatus("idle");
     setSubmitError(null);
@@ -637,12 +659,20 @@ export default function Home() {
     setError(null);
 
     try {
-      const selectedFiles = selected.map((i) => allImages[i].file);
-      const compressed = await Promise.all(selectedFiles.map(compressImage));
+      // Compress ALL photos (for Drive upload) — selected ones also go to AI
+      const allCompressed = await Promise.all(allImages.map((img) => compressImage(img.file)));
+      const selectedCompressed = selected.map((i) => allCompressed[i]);
 
-      // Analyze
+      // Upload ALL photos to Drive one-at-a-time, in parallel with AI analysis
+      const photoUploadPromise = (async () => {
+        const urls: string[] = [];
+        for (const file of allCompressed) urls.push(await uploadFileToDrive(file));
+        return urls;
+      })();
+
+      // Analyze selected photos
       const formData = new FormData();
-      compressed.forEach((f) => formData.append("images", f));
+      selectedCompressed.forEach((f) => formData.append("images", f));
       formData.append("measurements", JSON.stringify(measurementsRef.current));
 
       const analyzeRes = await fetch("/api/analyze", { method: "POST", body: formData });
@@ -654,9 +684,9 @@ export default function Home() {
       info.costPrice = costPriceRef.current;
       setProductInfo(info);
 
-      // Generate model images in parallel
+      // Generate model images
       const imageData = await Promise.all(
-        compressed.map(async (f) => {
+        selectedCompressed.map(async (f) => {
           const buf = await f.arrayBuffer();
           return { base64: Buffer.from(buf).toString("base64"), mimeType: f.type || "image/jpeg" };
         })
@@ -667,11 +697,21 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: imageData, productInfo: info }),
       });
+      let generated: string[] = [];
       if (genRes.ok) {
-        const { images: generated } = await genRes.json();
-        if (generated?.length) setAiImages(generated);
+        const { images } = await genRes.json();
+        if (images?.length) { generated = images; setAiImages(images); }
       }
 
+      // Upload AI images to Drive, then wait for photo uploads to finish
+      const aiUrls: string[] = [];
+      for (let i = 0; i < generated.length; i++) {
+        aiUrls.push(await uploadFileToDrive(base64ToFile(generated[i], `ai-model-${i}.jpg`)));
+      }
+      const photoUrls = await photoUploadPromise;
+
+      setUploadedDriveUrls(photoUrls);
+      setAiDriveUrls(aiUrls);
       setStage("review");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -697,49 +737,32 @@ export default function Home() {
       const body = await genRes.json().catch(() => ({}));
       throw new Error(body.error || "Failed to regenerate model images");
     }
-    const { images: generated } = await genRes.json();
+    const { images: generated } = await genRes.json() as { images: string[] };
     setAiImages(generated);
-    return generated as string[];
+
+    // Upload revised AI images to Drive, replacing previous AI Drive URLs
+    const newAiUrls: string[] = [];
+    for (let i = 0; i < generated.length; i++) {
+      newAiUrls.push(await uploadFileToDrive(base64ToFile(generated[i], `ai-model-${i}.jpg`)));
+    }
+    setAiDriveUrls(newAiUrls);
+
+    return generated;
   };
 
   const handleSubmit = async (orderedIdentifiers: string[]) => {
     if (!productInfo) return;
-    setSubmitStatus("uploading");
+    setSubmitStatus("submitting");
     setSubmitError(null);
 
     try {
-      // Build compressed File list in order
-      const files = await Promise.all(
-        orderedIdentifiers.map(async (id) => {
-          const [type, idxStr] = id.split(":");
-          const idx = Number(idxStr);
-          if (type === "uploaded") {
-            return compressImage(allImages[idx].file);
-          }
-          // AI image — decode base64 to File (already small, no compression needed)
-          const byteStr = atob(aiImages[idx]);
-          const arr = new Uint8Array(byteStr.length);
-          for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
-          const blob = new Blob([arr], { type: "image/jpeg" });
-          return new File([blob], `ai-model-${idx}.jpg`, { type: "image/jpeg" });
-        })
-      );
+      // Images are already uploaded to Drive during Stage 3 — just look up the URLs in order
+      const urls = orderedIdentifiers.map((id) => {
+        const [type, idxStr] = id.split(":");
+        const idx = Number(idxStr);
+        return type === "uploaded" ? (uploadedDriveUrls[idx] ?? "") : (aiDriveUrls[idx] ?? "");
+      });
 
-      // Upload one image at a time to stay under Vercel's 4.5 MB body limit
-      const urls: string[] = [];
-      for (const file of files) {
-        const fd = new FormData();
-        fd.append("images", file);
-        const uploadRes = await fetch("/api/upload-images", { method: "POST", body: fd });
-        if (!uploadRes.ok) {
-          const body = await uploadRes.json().catch(() => ({}));
-          throw new Error(body.error || `Image upload failed (${uploadRes.status})`);
-        }
-        const { urls: batch } = await uploadRes.json();
-        urls.push(...batch);
-      }
-
-      setSubmitStatus("submitting");
       const submitRes = await fetch("/api/add-to-inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
