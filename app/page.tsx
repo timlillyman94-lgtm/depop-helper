@@ -2,6 +2,22 @@
 
 import { useState, useRef, useCallback } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { ProductInfo, Measurements } from "@/lib/gemini";
 import { CATEGORIES, CONDITIONS, COLOURS, SOURCES, AGES, STYLES, WOMENS_SIZES } from "@/lib/depop-options";
 import brandsData from "@/lib/brands.json";
@@ -327,6 +343,66 @@ function StageGenerate() {
   );
 }
 
+// ─── Sortable image row (used in Stage 4) ────────────────────────────────────
+
+type ImageSlot = { type: "uploaded"; idx: number } | { type: "ai"; idx: number };
+
+function slotId(slot: ImageSlot) {
+  return `${slot.type}-${slot.idx}`;
+}
+
+function SortableImageRow({
+  slot,
+  position,
+  preview,
+  onLightbox,
+  onRemove,
+}: {
+  slot: ImageSlot;
+  position: number;
+  preview: string;
+  onLightbox: (src: string) => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: slotId(slot) });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-2"
+    >
+      {/* Drag handle — only element that starts a drag */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="touch-none cursor-grab active:cursor-grabbing px-1 py-2 text-gray-300 text-lg select-none"
+        aria-label="Drag to reorder"
+      >
+        ⠿
+      </button>
+      <span className="text-xs font-bold text-gray-400 w-5 text-center">{position}</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={preview}
+        alt=""
+        className="w-12 h-12 object-cover rounded-lg flex-shrink-0 cursor-pointer active:opacity-70"
+        onClick={() => onLightbox(preview)}
+      />
+      <span className="text-xs text-gray-500 flex-1">
+        {slot.type === "ai" ? `AI model ${slot.idx + 1}` : `Photo ${slot.idx + 1}`}
+      </span>
+      <button
+        onClick={onRemove}
+        className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-xs flex items-center justify-center"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 // ─── Stage 4: Review & Submit ─────────────────────────────────────────────────
 
 function StageReview({
@@ -357,11 +433,7 @@ function StageReview({
 
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-  // Image ordering state
-  // Pool: all uploaded images (using preview URL) + AI images (using data URLs)
-  type ImageSlot = { type: "uploaded"; idx: number } | { type: "ai"; idx: number };
   const [orderedSlots, setOrderedSlots] = useState<ImageSlot[]>(() => {
-    // Default: AI images first, then uploaded
     const slots: ImageSlot[] = [];
     aiImages.forEach((_, i) => slots.push({ type: "ai", idx: i }));
     allImages.forEach((_, i) => slots.push({ type: "uploaded", idx: i }));
@@ -370,20 +442,26 @@ function StageReview({
   const [revisionNote, setRevisionNote] = useState("");
   const [regenerating, setRegenerating] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setOrderedSlots((slots) => {
+        const from = slots.findIndex((s) => slotId(s) === active.id);
+        const to = slots.findIndex((s) => slotId(s) === over.id);
+        return arrayMove(slots, from, to);
+      });
+    }
+  };
+
   const getPreview = (slot: ImageSlot) =>
     slot.type === "ai"
       ? `data:image/jpeg;base64,${aiImages[slot.idx]}`
       : allImages[slot.idx].preview;
-
-  const moveSlot = (from: number, to: number) => {
-    if (to < 0 || to >= orderedSlots.length) return;
-    setOrderedSlots((prev) => {
-      const next = [...prev];
-      const [item] = next.splice(from, 1);
-      next.splice(to, 0, item);
-      return next;
-    });
-  };
 
   const removeSlot = (i: number) =>
     setOrderedSlots((prev) => prev.filter((_, idx) => idx !== i));
@@ -409,32 +487,23 @@ function StageReview({
 
       {/* Image ordering */}
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Image Order (tap arrows to reorder)</p>
-        <div className="space-y-2">
-          {orderedSlots.map((slot, i) => (
-            <div key={`${slot.type}-${slot.idx}-${i}`} className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-2">
-              <span className="text-xs font-bold text-gray-400 w-5 text-center">{i + 1}</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={getPreview(slot)}
-                alt=""
-                className="w-12 h-12 object-cover rounded-lg flex-shrink-0 cursor-pointer active:opacity-70"
-                onClick={() => setLightboxSrc(getPreview(slot))}
-              />
-              <span className="text-xs text-gray-500 flex-1">
-                {slot.type === "ai" ? `AI model ${slot.idx + 1}` : `Photo ${slot.idx + 1}`}
-              </span>
-              <div className="flex gap-1">
-                <button onClick={() => moveSlot(i, i - 1)} disabled={i === 0}
-                  className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-xs disabled:opacity-30">↑</button>
-                <button onClick={() => moveSlot(i, i + 1)} disabled={i === orderedSlots.length - 1}
-                  className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-xs disabled:opacity-30">↓</button>
-                <button onClick={() => removeSlot(i)}
-                  className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 text-xs">×</button>
-              </div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Image Order (drag ⠿ to reorder)</p>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={orderedSlots.map(slotId)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {orderedSlots.map((slot, i) => (
+                <SortableImageRow
+                  key={slotId(slot)}
+                  slot={slot}
+                  position={i + 1}
+                  preview={getPreview(slot)}
+                  onLightbox={setLightboxSrc}
+                  onRemove={() => removeSlot(i)}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Revise model photos */}
