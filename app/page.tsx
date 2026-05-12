@@ -725,15 +725,19 @@ export default function Home() {
         })
       );
 
-      const formData = new FormData();
-      files.forEach((f) => formData.append("images", f));
-
-      const uploadRes = await fetch("/api/upload-images", { method: "POST", body: formData });
-      if (!uploadRes.ok) {
-        const body = await uploadRes.json().catch(() => ({}));
-        throw new Error(body.error || `Image upload failed (${uploadRes.status})`);
+      // Upload one image at a time to stay under Vercel's 4.5 MB body limit
+      const urls: string[] = [];
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("images", file);
+        const uploadRes = await fetch("/api/upload-images", { method: "POST", body: fd });
+        if (!uploadRes.ok) {
+          const body = await uploadRes.json().catch(() => ({}));
+          throw new Error(body.error || `Image upload failed (${uploadRes.status})`);
+        }
+        const { urls: batch } = await uploadRes.json();
+        urls.push(...batch);
       }
-      const { urls } = await uploadRes.json();
 
       setSubmitStatus("submitting");
       const submitRes = await fetch("/api/add-to-inventory", {
