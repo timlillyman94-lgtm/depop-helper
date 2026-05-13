@@ -164,7 +164,7 @@ ${STYLES.join(", ")}`;
   try { tags = JSON.parse(hashText); } catch { tags = []; }
   const hashtagLine = tags.length ? "\n\n" + tags.map((t) => `#${t}`).join(" ") : "";
 
-  const fullDescription = raw.description + measurementsText + hashtagLine + AI_DISCLAIMER;
+  const fullDescription = raw.title + "\n\n" + raw.description + measurementsText + hashtagLine + AI_DISCLAIMER;
 
   return {
     title: raw.title ?? "",
