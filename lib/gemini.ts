@@ -115,7 +115,7 @@ Return this exact structure:
   "price": "Suggested AUD sell price as a number only e.g. 18 — based on brand prestige and condition",
   "brand": "Brand name as plain text exactly as it appears on labels/tags, or empty string if no brand",
   "condition": "Must be one of the CONDITIONS list",
-  "size": "Size label if visible on garment, or best guess. Use one of: ${WOMENS_SIZES.join(", ")}",
+  "size": "Size label visible on the garment tag. Return ONLY one exact value from this list — never add a country prefix like 'AU' or 'AUS': ${WOMENS_SIZES.join(", ")}",
   "colour1": "Must be one of the COLOURS list",
   "colour2": "Secondary colour if clearly present, must be from COLOURS list, or empty string",
   "source1": "Must be one of the SOURCES list — almost always Preloved (preloved)",
@@ -149,8 +149,9 @@ ${STYLES.join(", ")}`;
   const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
   const raw = JSON.parse(cleaned);
 
-  // Resolve brand to exact dropdown value
+  // Resolve brand to exact dropdown value; fall back to "" if not in brands list
   const resolvedBrand = matchBrand(raw.brand ?? "");
+  const validatedBrand = resolvedBrand.includes("(") ? resolvedBrand : "";
 
   // Build full description with measurements + hashtags + disclaimer
   const measurementsText = buildMeasurementsText(measurements);
@@ -171,9 +172,9 @@ ${STYLES.join(", ")}`;
     description: fullDescription,
     category: CATEGORIES.includes(raw.category) ? raw.category : "",
     price: String(raw.price ?? ""),
-    brand: resolvedBrand,
+    brand: validatedBrand,
     condition: CONDITIONS.includes(raw.condition) ? raw.condition : "",
-    size: WOMENS_SIZES.includes(raw.size) ? raw.size : raw.size ?? "",
+    size: (() => { const s = (raw.size ?? "").replace(/^AU[S]?\s*/i, "").trim(); return WOMENS_SIZES.includes(s) ? s : s; })(),
     colour1: COLOURS.includes(raw.colour1) ? raw.colour1 : "",
     colour2: COLOURS.includes(raw.colour2) ? raw.colour2 : "",
     source1: SOURCES.includes(raw.source1) ? raw.source1 : "Preloved (preloved)",

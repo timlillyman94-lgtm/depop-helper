@@ -44,7 +44,7 @@ export async function appendBulkUploadRow(
   const row = [
     productInfo.description,                                    // A: Description
     productInfo.category,                                       // B: Category
-    productInfo.price,                                          // C: Price
+    productInfo.price ? Number(productInfo.price) : "",          // C: Price
     productInfo.brand,                                          // D: Brand
     productInfo.condition,                                      // E: Condition
     productInfo.size,                                           // F: Size
